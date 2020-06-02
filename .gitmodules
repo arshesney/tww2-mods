@@ -1,0 +1,3 @@
+[submodule "community_bugfix_mod"]
+	path = community_bugfix_mod
+	url = https://github.com/chadvandy/community_bugfix_mod
