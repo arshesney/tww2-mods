@@ -1,16 +1,29 @@
 out("=========== Skarsnik start in Eight Peaks begin ===========");
 
-function Arsh79_logger(text)
-	if not __write_output_to_logfile then
-		return;
-	end
+-- Check for MCT
+local mcm = _G.mcm;
 
-	local log_text = tostring(text);
-	local log_timestamp = os.date("%Y-%m-%d, %X");
-	local pop_log = io.open("arsh79_skarsnik_k8p.txt", "a");
-	pop_log :write("skarsnik_K8P: [".. log_timestamp .."]: ".. log_text .."\n");
-	pop_log :flush()
-	pop_log :close()
+-- And set a default value (MCT 1)
+cm:set_saved_value("mcm_tweaker_arsh79_k8p_who_control_value", "skarsnik_value");
+-- MCT 2
+local settings = {
+	mct_skarsnik_option_value = "skarsnik_value",
+	mct_k8p_factions_war_value = true,
+}
+
+local function disable_feed()
+	cm:disable_event_feed_events(true, "wh_event_category_conquest", "", "");
+	cm:disable_event_feed_events(true, "wh_event_category_diplomacy", "", "");
+end
+
+local function enable_feed()
+	cm:callback(
+		function()
+			cm:disable_event_feed_events(false, "wh_event_category_conquest", "", "");
+			cm:disable_event_feed_events(false, "wh_event_category_diplomacy", "", "");
+		end,
+		1
+	);
 end
 
 local function get_rid_of_mutinous_gits()
@@ -51,9 +64,48 @@ local function move_faction_chars_to_region(faction, region)
 	end
 end
 
--- Main function
+-- Declare war between the K8P factions if they are not human controlled
+local function k8p_race_wardecs(faction)
+	local k8p_factions = {
+		"wh_main_grn_crooked_moon",
+		"wh_main_dwf_karak_izor",
+		"wh2_main_skv_clan_mors"
+	}
+	if not settings.mct_k8p_factions_war_value then
+		Arsh79_logger("War declarations disabled by settings");
+		return
+	end
+
+	Arsh79_logger("Declaring war against "..faction)
+	for _, current_faction_str in ipairs(k8p_factions) do
+
+		local current_faction = cm:get_faction(current_faction_str);
+		Arsh79_logger("Check if "..current_faction_str.." is a player")
+
+		if current_faction_str ~= faction and not current_faction:is_human() then
+			Arsh79_logger(current_faction_str.." declares war on "..faction)
+			cm:force_declare_war(current_faction_str, faction, false, false, false);
+		end
+	end
+end
+
+-- Transfer K8P control
+local function k8p_to_faction(faction)
+	get_rid_of_mutinous_gits();
+
+	cm:transfer_region_to_faction("wh_main_eastern_badlands_karak_eight_peaks", faction:name());
+	move_faction_chars_to_region(faction, "wh_main_eastern_badlands_karak_eight_peaks");
+
+	k8p_race_wardecs(faction:name());
+
+	-- CA function for k8p owned events
+	eight_peaks_check(faction:name());
+end
+
+-- Main functions
 local function arsh79_skarsnik_k8p()
 	Arsh79_logger("Main function for Skarsnik");
+	disable_feed();
 
 	local crooked_moon = cm:get_faction("wh_main_grn_crooked_moon");
 	local skarsnik_cqi = cm:char_lookup_str(crooked_moon:faction_leader():command_queue_index());
@@ -62,12 +114,7 @@ local function arsh79_skarsnik_k8p()
 	if crooked_moon and not crooked_moon:is_human() then
 		Arsh79_logger("Skarsink is AI controlled, giving him K8P");
 
-		get_rid_of_mutinous_gits();
-
-		-- Transfer region to Crooked Moon and move Skarsnik there (don't leave Sly da Miser behind!)
-		cm:transfer_region_to_faction("wh_main_eastern_badlands_karak_eight_peaks", crooked_moon:name());
-
-		move_faction_chars_to_region(crooked_moon, "wh_main_eastern_badlands_karak_eight_peaks");
+		k8p_to_faction(crooked_moon);
 
 		-- Give Skarsnik some XP
 		cm:add_agent_experience(skarsnik_cqi, 2000);
@@ -100,19 +147,17 @@ local function arsh79_skarsnik_k8p()
 		-- Now, for Karak Azgaraz, give it back to Karak Norn
 		cm:transfer_region_to_faction("wh_main_southern_grey_mountains_karak_azgaraz", "wh_main_dwf_karak_norn");
 
-		-- Peace out Karak Norn
+		-- Peace out Karak Norn, we're too far to care
 		cm:force_make_peace(crooked_moon:name(), "wh_main_dwf_karak_norn");
 
-		-- And war with Clan Volkn
-		cm:force_declare_war("wh2_dlc15_skv_clan_volkn", crooked_moon:name(), false, false, false);
-
-		eight_peaks_check(crooked_moon:name());
 		Arsh79_logger("K8P Skarsnik init done!");
 	end
+	enable_feed();
 end
 
 local function arsh79_belegar_k8p()
 	Arsh79_logger("Main function for Belegar");
+	disable_feed();
 
 	local clan_angrund = cm:get_faction("wh_main_dwf_karak_izor");
 	local belegar_cqi = cm:char_lookup_str(clan_angrund:faction_leader():command_queue_index());
@@ -121,12 +166,7 @@ local function arsh79_belegar_k8p()
 	if clan_angrund and not clan_angrund:is_human() then
 		Arsh79_logger("Belegar is AI controlled, giving him K8P");
 
-		get_rid_of_mutinous_gits();
-
-		-- Transfer region control
-		cm:transfer_region_to_faction("wh_main_eastern_badlands_karak_eight_peaks", clan_angrund:name());
-
-		move_faction_chars_to_region(clan_angrund, "wh_main_eastern_badlands_karak_eight_peaks");
+		k8p_to_faction(clan_angrund);
 
 		-- Move Skarsnik to Karak Izor if AI controlled
 		local crooked_moon = cm:get_faction("wh_main_grn_crooked_moon");
@@ -145,17 +185,14 @@ local function arsh79_belegar_k8p()
 			-- Otherwise Karak Izor goes to Clan Spittel
 			cm:transfer_region_to_faction("wh_main_the_vaults_karak_izor", "wh2_main_skv_clan_spittel");
 		end
-
-		-- War with Clan Volkn
-		cm:force_declare_war("wh2_dlc15_skv_clan_volkn", clan_angrund:name(), false, false, false);
-
-		eight_peaks_check(clan_angrund:name());
 		Arsh79_logger("K8P Belegar init done!");
 	end
+	enable_feed();
 end
 
 local function arsh79_queek_k8p()
 	Arsh79_logger("Main function for Queek");
+	disable_feed();
 
 	local clan_mors = cm:get_faction("wh2_main_skv_clan_mors");
 	local queek_cqi = cm:char_lookup_str(clan_mors:faction_leader():command_queue_index());
@@ -164,26 +201,15 @@ local function arsh79_queek_k8p()
 	if clan_mors and not clan_mors:is_human() then
 		Arsh79_logger("Queek is AI controlled, giving him K8P");
 
-		get_rid_of_mutinous_gits();
-
-		-- Transfer region control
-		cm:transfer_region_to_faction("wh_main_eastern_badlands_karak_eight_peaks", clan_mors:name());
-
-		move_faction_chars_to_region(clan_mors, "wh_main_eastern_badlands_karak_eight_peaks");
+		k8p_to_faction(clan_mors);
 
 		-- Abandon Karag Orrud
 		cm:set_region_abandoned("wh2_main_charnel_valley_karag_orrud");
 
-		eight_peaks_check(clan_mors:name());
 		Arsh79_logger("K8P Queek init done!");
 	end
+	enable_feed();
 end
-
--- Check for MCT
-local mcm = _G.mcm;
-
--- And set a default value
-cm:set_saved_value("mcm_tweaker_arsh79_k8p_who_control_value", "skarsnik_value");
 
 -- Build MCT menu if present
 if not not mcm then
@@ -199,27 +225,59 @@ end
 
 -- And listen for its callback
 local skarsnik_k8p_callback = function()
-	local value = cm:get_saved_value("mcm_tweaker_arsh79_k8p_who_control_value");
 
-	Arsh79_logger("MCT selection: "..tostring(value));
+	if mcm then
+		settings.mct_skarsnik_option_value = cm:get_saved_value("mcm_tweaker_arsh79_k8p_who_control_value");
+		Arsh79_logger("MCT selection: "..tostring(settings.mct_skarsnik_option_value));
+	end
 
-	if value == "skarsnik_value" then
-		Arsh79_logger("Skarsnik Warlord of Karak Eight Peaks");
+	Arsh79_logger("Settings: "..tostring(settings.mct_skarsnik_option_value)..", war: "..tostring(settings.mct_k8p_factions_war_value));
+
+	if settings.mct_skarsnik_option_value == "skarsnik_value" then
 		arsh79_skarsnik_k8p();
-	elseif value == "belegar_value" then
-		Arsh79_logger("Belegar Ironhammer");
+	elseif settings.mct_skarsnik_option_value == "belegar_value" then
 		arsh79_belegar_k8p();
-	elseif value == "queek_value" then
-		Arsh79_logger("Queek Headtaker");
+	elseif settings.mct_skarsnik_option_value == "queek_value" then
 		arsh79_queek_k8p();
 	else
 		Arsh79_logger("Dem Muntinous Gits");
+		k8p_race_wardecs("wh2_main_skv_clan_mors");
 	end
 end
 
--- No MCM, just add to first tick with default value
+-- No MCT 1, just add to first tick with default value
 if not mcm then
-	Arsh79_logger("no MCT, running at first tick");
+	Arsh79_logger("no MCT 1.0, adding listener for MCT 2.0 and/or the default action at first tick");
+
+	core:add_listener(
+		"arsh79_skarsnik_k8p_init",
+		"MctInitialized",
+		true,
+		function(context)
+			Arsh79_logger("MCT initialized listener called");
+			local mct = context:mct();
+
+			local k8p_mod = mct:get_mod_by_key("arsh79_skarsnik_k8p");
+			Arsh79_logger("Got settings from MCT");
+
+			local mct_skarsnik_option = k8p_mod:get_option_by_key("who_controls_k8p");
+			local mct_skarsnik_option_value = mct_skarsnik_option:get_finalized_setting();
+			mct_skarsnik_option:set_read_only();
+			Arsh79_logger("mct_skarsnik_option_value: "..tostring(mct_skarsnik_option_value));
+
+			local mct_k8p_factions_war = k8p_mod:get_option_by_key("factions_at_war");
+			local mct_k8p_factions_war_value = mct_k8p_factions_war:get_finalized_setting();
+			mct_k8p_factions_war:set_read_only();
+			Arsh79_logger("mct_k8p_factions_war_value: "..tostring(mct_k8p_factions_war_value));
+
+			settings.mct_skarsnik_option_value = mct_skarsnik_option_value;
+			settings.mct_k8p_factions_war_value = mct_k8p_factions_war_value;
+
+			Arsh79_logger("MCT 2 faction: "..tostring(settings.mct_skarsnik_option_value)..", war: "..tostring(mct_k8p_factions_war_value));
+		end,
+		true
+	)
+
 	cm.first_tick_callbacks[#cm.first_tick_callbacks+1] = function()
 		if cm:is_new_game() then
 			Arsh79_logger("new game first tick");
