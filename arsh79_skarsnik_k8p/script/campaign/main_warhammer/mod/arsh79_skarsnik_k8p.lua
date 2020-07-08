@@ -9,6 +9,7 @@ cm:set_saved_value("mcm_tweaker_arsh79_k8p_who_control_value", "skarsnik_value")
 local settings = {
 	mct_skarsnik_option_value = "skarsnik_value",
 	mct_k8p_factions_war_value = true,
+	use_old_mcm = true,
 }
 
 local function disable_feed()
@@ -211,8 +212,40 @@ local function arsh79_queek_k8p()
 	enable_feed();
 end
 
+core:add_listener(
+	"arsh79_skarsnik_k8p_init",
+	"MctInitialized",
+	true,
+	function(context)
+		Arsh79_logger("MCT initialized listener called");
+		local mct = context:mct();
+
+		Arsh79_logger("Disabling MCT 1,0")
+		settings.use_old_mcm = false;
+
+		local k8p_mod = mct:get_mod_by_key("arsh79_skarsnik_k8p");
+		Arsh79_logger("Got settings from MCT");
+
+		local mct_skarsnik_option = k8p_mod:get_option_by_key("who_controls_k8p");
+		local mct_skarsnik_option_value = mct_skarsnik_option:get_finalized_setting();
+		mct_skarsnik_option:set_read_only();
+		Arsh79_logger("mct_skarsnik_option_value: "..tostring(mct_skarsnik_option_value));
+
+		local mct_k8p_factions_war = k8p_mod:get_option_by_key("factions_at_war");
+		local mct_k8p_factions_war_value = mct_k8p_factions_war:get_finalized_setting();
+		mct_k8p_factions_war:set_read_only();
+		Arsh79_logger("mct_k8p_factions_war_value: "..tostring(mct_k8p_factions_war_value));
+
+		settings.mct_skarsnik_option_value = mct_skarsnik_option_value;
+		settings.mct_k8p_factions_war_value = mct_k8p_factions_war_value;
+
+		Arsh79_logger("MCT 2 faction: "..tostring(settings.mct_skarsnik_option_value)..", war: "..tostring(mct_k8p_factions_war_value));
+	end,
+	true
+)
+
 -- Build MCT menu if present
-if not not mcm then
+if mcm and settings.use_old_mcm then
 	Arsh79_logger("found MCT, setting up menu for Skarsnik K8P");
 	local skarsnik_k8p_mcm = mcm:register_mod("arsh79_k8p", "Skarsnik K8P", "Skarsnik start in Karak Eight Peaks");
 	local skarsnik_k8p_set = skarsnik_k8p_mcm:add_tweaker("who_control", "Choose who starts in Karak Eight Peaks");
@@ -226,7 +259,7 @@ end
 -- And listen for its callback
 local skarsnik_k8p_callback = function()
 
-	if mcm then
+	if mcm and settings.use_old_mcm then
 		settings.mct_skarsnik_option_value = cm:get_saved_value("mcm_tweaker_arsh79_k8p_who_control_value");
 		Arsh79_logger("MCT selection: "..tostring(settings.mct_skarsnik_option_value));
 	end
@@ -245,38 +278,12 @@ local skarsnik_k8p_callback = function()
 	end
 end
 
--- No MCT 1, just add to first tick with default value
-if not mcm then
-	Arsh79_logger("no MCT 1.0, adding listener for MCT 2.0 and/or the default action at first tick");
-
-	core:add_listener(
-		"arsh79_skarsnik_k8p_init",
-		"MctInitialized",
-		true,
-		function(context)
-			Arsh79_logger("MCT initialized listener called");
-			local mct = context:mct();
-
-			local k8p_mod = mct:get_mod_by_key("arsh79_skarsnik_k8p");
-			Arsh79_logger("Got settings from MCT");
-
-			local mct_skarsnik_option = k8p_mod:get_option_by_key("who_controls_k8p");
-			local mct_skarsnik_option_value = mct_skarsnik_option:get_finalized_setting();
-			mct_skarsnik_option:set_read_only();
-			Arsh79_logger("mct_skarsnik_option_value: "..tostring(mct_skarsnik_option_value));
-
-			local mct_k8p_factions_war = k8p_mod:get_option_by_key("factions_at_war");
-			local mct_k8p_factions_war_value = mct_k8p_factions_war:get_finalized_setting();
-			mct_k8p_factions_war:set_read_only();
-			Arsh79_logger("mct_k8p_factions_war_value: "..tostring(mct_k8p_factions_war_value));
-
-			settings.mct_skarsnik_option_value = mct_skarsnik_option_value;
-			settings.mct_k8p_factions_war_value = mct_k8p_factions_war_value;
-
-			Arsh79_logger("MCT 2 faction: "..tostring(settings.mct_skarsnik_option_value)..", war: "..tostring(mct_k8p_factions_war_value));
-		end,
-		true
-	)
+-- Add actions at first tick or use MCT 1.0 if found
+if mcm and settings.use_old_mcm  then
+	Arsh79_logger("from MCT menu");
+	mcm:add_new_game_only_callback(skarsnik_k8p_callback);
+else
+	Arsh79_logger("no MCT 1.0,using MCT 2.0 or the default action at first tick");
 
 	cm.first_tick_callbacks[#cm.first_tick_callbacks+1] = function()
 		if cm:is_new_game() then
@@ -284,7 +291,4 @@ if not mcm then
 			skarsnik_k8p_callback();
 		end
 	end
-else
-	Arsh79_logger("from MCT menu");
-	mcm:add_new_game_only_callback(skarsnik_k8p_callback);
 end
