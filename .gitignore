@@ -1,6 +1,4 @@
 *.code-workspace
-*.pack 
-gccm*
-@minor*
 mootland_connection/script/campaign/main_warhammer/mod/mootland_connection.lua
 arsh79_chaos_alliance/script/campaign/main_warhammer/mod/arsh79_chaos_alliance.lua
+minor_settlements_rework.pack
